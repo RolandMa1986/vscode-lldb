@@ -487,9 +487,16 @@ impl DebugSession {
         let mut result = vec![];
         for req in requested_bps {
             // Find existing breakpoint or create a new one
+            // Todo: If it's a csharp file, call sos bpmd command to create the breakpoint
             let bp = match existing_bps.get(&req.line).and_then(|bp_id| self.target.find_breakpoint_by_id(*bp_id)) {
                 Some(bp) => bp,
                 None => {
+                    if file_path_norm.to_str().ok_or("path")?.ends_with(".cs"){
+                        let mut commands: Vec<String> = Vec::new();
+                        let bpmd_command = format!("bpmd {}:{}", file_path_norm.to_str().ok_or("path")?, req.line);
+                        commands.push(bpmd_command);
+                        self.exec_commands("clr",&commands)?;
+                    }
                     self.target.breakpoint_create_by_location(file_path_norm.to_str().ok_or("path")?, req.line as u32)
                 }
             };
@@ -1485,16 +1492,47 @@ impl DebugSession {
                     }
                 }
             } else {
+                // try convert pc to managed method table and get source file or IL code
                 let pc_addr = frame.pc();
-                let dasm = self.disassembly.get_by_address(pc_addr);
-                stack_frame.line = dasm.line_num_by_address(pc_addr) as i64;
-                stack_frame.column = 0;
-                stack_frame.source = Some(Source {
-                    name: Some(dasm.source_name().to_owned()),
-                    source_reference: Some(handles::to_i64(Some(dasm.handle()))),
-                    ..Default::default()
-                });
-                stack_frame.presentation_hint = Some("subtle".to_owned());
+                let command = format!("ip2md {:X}", pc_addr);
+                let sbframe:Option<&SBFrame> = Some(&frame);
+                let context = self.context_from_frame(sbframe);
+                let mut result = SBCommandReturnObject::new();
+                let interp = self.debugger.command_interpreter();
+                drop(self.debugger.set_output_stream(self.null_pipe.try_clone()?));
+                let ok = interp.handle_command_with_context(&command, &context, &mut result, false);
+                drop(self.debugger.set_output_stream(self.console_pipe.try_clone()?));
+                if result.succeeded() {
+                    if let Some(output) = into_string_lossy(result.output()).trim_end().lines().last(){
+                        if let Some(paths_to_line) = output.strip_prefix("Source file:") {
+                            let paths_to_line_v: Vec<&str> = paths_to_line.split('@').collect();
+                            let path = paths_to_line_v[0].trim();
+                            let fs = SBFileSpec::from(path);
+                            let line:i64 = paths_to_line_v[1].trim().parse().ok().unwrap_or_default();
+                            let column = 0;
+                            if let Some(local_path) = self.map_filespec_to_local(&fs) {
+                                stack_frame.line = line as i64;
+                                stack_frame.column = column as i64;
+                                stack_frame.source = Some(Source {
+                                    name: Some(local_path.file_name().unwrap().to_string_lossy().into_owned()),
+                                    path: Some(local_path.to_string_lossy().into_owned()),
+                                    ..Default::default()
+                                });
+                            }
+                        }
+                    }
+                } else {
+                    let dasm = self.disassembly.get_by_address(pc_addr);
+                    stack_frame.line = dasm.line_num_by_address(pc_addr) as i64;
+                    stack_frame.column = 0;
+                    stack_frame.source = Some(Source {
+                        name: Some(dasm.source_name().to_owned()),
+                        source_reference: Some(handles::to_i64(Some(dasm.handle()))),
+                        ..Default::default()
+                    });
+                    stack_frame.presentation_hint = Some("subtle".to_owned());
+                }
+
             }
             stack_frames.push(stack_frame);
         }

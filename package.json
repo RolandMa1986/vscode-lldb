@@ -430,6 +430,9 @@
 			},
 			{
 				"language": "swift"
+			},
+			{
+				"language": "csharp"
 			}
 		],
 		"debuggers": [
@@ -449,7 +452,8 @@
 					"objective-c",
 					"objectpascal",
 					"pascal",
-					"rust"
+					"rust",
+					"csharp"
 				],
 				"variables": {
 					"pickProcess": "lldb.pickProcess",
