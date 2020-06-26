@@ -1,36 +1,28 @@
-# Features
-- Debugging on Linux (x64 or ARM), macOS and Windows<sup>*</sup>,
-- Conditional breakpoints, function breakpoints, data breakpoints, logpoints,
-- Launch debuggee in integrated or external terminal,
-- Disassembly view with instruction-level stepping,
-- Loaded modules view,
-- Python scripting,
-- HTML rendering for advanced visualizations,
-- Rust language support with built-in visualizars for vectors, strings and other standard types,
-- Global and workspace defaults for launch configurations,
-- Remote debugging,
-- Reverse debugging (experimental, requires compatible backend).
+# Abaut
+While learning CLR Runtime, I found it's hardly to understand how the context is switched between Managed and Nitave Code.
 
-<sup>\*</sup> DWARF debug info format recommended, limited support for MS PDB.
+When I choose codelldb or cppdbg debugger to launch the app(in vscode), I can neither set the breakpoint on C# code, nor see the Managed CallStack.
 
-For full details please see [the User's Manual](MANUAL.md).
+You can not get Native frames if you are using coreclr debugger.
 
-# Minimal System Requirements
-- 64-bit OS
-    - Linux: glibc 2.18 (Debian 8, Ubuntu 14.04, Centos 8)
-    - Mac: OS X 10.10 Yosemite
-    - Windows: 10.0
-- 64-bit Python 3.5 (optional, except on Windows).
+# SOS
+Sometimes I will use [SOS](https://github.com/dotnet/diagnostics) plugin with lldb. but all the command was executed outside of the vscode.
+So why not bring codelldb and sos together?
+
+# Changes
+- When initializing the lldb. SOS will be loaded.
+- Check file's extention. use bpmd command instead if it's a cs file.
+- Try find managed frame by IP2MD command if no source code is found when breakpoint is hit.
 
 # Quick Start
 Here's a minimal debug configuration to get you started:
 ```javascript
 {
-    "name": "Launch",
-    "type": "lldb",
-    "request": "launch",
-    "program": "${workspaceFolder}/<my program>",
-    "args": ["-arg1", "-arg2"],
+    "lldb.launch.debugServer": 4711,
+    "lldb.launch.initCommands": [
+        "plugin load /home/path/to/sos/libsosplugin.so",
+        "setsymbolserver -ms"
+    ],
 }
 ```
 
@@ -41,14 +33,5 @@ Here's a minimal debug configuration to get you started:
 - [Troubleshooting](https://github.com/vadimcn/vscode-lldb/wiki/Troubleshooting) - known problems and solutions.
 - [Q & A](https://stackoverflow.com/questions/tagged/visual-studio-code+codelldb) - for when you are stuck.
 
-
-# Screenshots
-
-C++ debugging with data visualization ([Howto](https://github.com/vadimcn/vscode-lldb/wiki/Data-visualization)):<br>
-![source](images/plotting.png)
-<br>
-<br>
-Rust debugging:<br>
-![source](images/source.png)
 
 
